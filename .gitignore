@@ -1,0 +1,13 @@
+# Agent working notes — local only, not published
+AGENTS.md
+
+# Upstream source tarball — re-downloadable, keep only the patchset
+src/*.tar.*
+
+# Patched upstream tree — reproducible from tarball + src/uade-3.05.patchset
+uade-3.05/
+
+# Editor / OS noise
+*.swp
+*~
+.DS_Store
