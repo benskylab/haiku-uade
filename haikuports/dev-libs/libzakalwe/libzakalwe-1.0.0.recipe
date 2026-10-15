@@ -1,0 +1,78 @@
+SUMMARY="Small C utility library with data structures and strings"
+DESCRIPTION="libzakalwe is a small C library providing dynamic arrays, maps, \
+trees, strings and other data structures. It is a dependency of the UADE \
+Amiga music player (see media-sound/uade) and of bencode-tools. This port \
+installs the shared library and the development headers."
+HOMEPAGE="https://gitlab.com/hors/libzakalwe"
+COPYRIGHT="2026 Heikki Orsila"
+LICENSE="BSD (2-clause)"
+REVISION="1"
+
+# Upstream publishes no release tarballs, so this is a pinned gitlab
+# archive of the master commit f40771d472d1a3846969678d893846a48c16b025
+# (2026-09-20). The "version" file inside the tree says 1.0.0.
+SOURCE_URI="https://gitlab.com/hors/libzakalwe/-/archive/f40771d472d1a3846969678d893846a48c16b025/libzakalwe-f40771d472d1a3846969678d893846a48c16b025.tar.gz"
+SOURCE_FILENAME="libzakalwe-$portVersion.tar.gz"
+CHECKSUM_SHA256="58f8b478bd26065630728b33f84c7c16007f01a2a9b1b1ef69c5d250a0687913"
+SOURCE_DIR="libzakalwe-f40771d472d1a3846969678d893846a48c16b025"
+
+ARCHITECTURES="all !x86_gcc2"
+
+PROVIDES="
+	libzakalwe = $portVersion
+	lib:libzakalwe = $portVersion
+	"
+REQUIRES="
+	haiku
+	"
+
+PROVIDES_devel="
+	libzakalwe_devel = $portVersion
+	devel:libzakalwe = $portVersion
+	"
+REQUIRES_devel="
+	libzakalwe == $portVersion base
+	"
+
+BUILD_REQUIRES="
+	haiku_devel
+	"
+BUILD_PREREQUIRES="
+	cmd:gcc
+	cmd:make
+	"
+
+defineDebugInfoPackage libzakalwe $libDir/libzakalwe.so
+
+BUILD()
+{
+	# "configure" is a bash feature-test script, not autoconf: it generates
+	# include/zakalwe/config.h and substitutes the compiler into Makefile.in.
+	# It takes no arguments.
+	./configure
+	make
+}
+
+INSTALL()
+{
+	# Upstream's install rule copies the library to $(PREFIX)/lib and the
+	# headers to $(PREFIX)/include/zakalwe. PREFIX defaults to /usr/local
+	# and is a plain make variable, so override it here and then move the
+	# headers to Haiku's development directory. The upstream install rule
+	# creates $(PREFIX)/include/zakalwe but not $(PREFIX)/lib, so make the
+	# library directory first to avoid "cannot create regular file".
+	mkdir -p $prefix/lib
+	make install PREFIX=$prefix
+
+	mkdir -p $(dirname $includeDir)
+	mv $prefix/include $includeDir
+
+	prepareInstalledDevelLibs libzakalwe
+	packageEntries devel $developDir
+}
+
+TEST()
+{
+	# Upstream unit tests; they are already built by "make" above.
+	make check
+}

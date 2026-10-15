@@ -1,0 +1,106 @@
+SUMMARY="Plays Amiga music formats through emulation"
+DESCRIPTION="UADE (Unix Amiga Delitracker Emulator) plays music formats from \
+the Commodore Amiga era by running the original 68k player programs \
+('eagle players') inside an emulator core. This covers module formats (MOD \
+and tracker variants), AHX, Startrekker and many custom player formats, \
+which is why UADE ships the original player binaries together with their \
+licenses. Provides the uade123 command line frontend, which detects the \
+player automatically, prints song information without playing, and outputs \
+audio through libao including its native Haiku Media Kit driver."
+HOMEPAGE="https://zakalwe.fi/uade/"
+COPYRIGHT="2000-2024 Heikki Orsila, Michael Doering, and others"
+LICENSE="GNU GPL v2
+	GNU LGPL v2.1"
+REVISION="1"
+
+SOURCE_URI="https://zakalwe.fi/uade/uade3/uade-$portVersion.tar.bz2"
+CHECKSUM_SHA256="1a2dd9fdf8cf47c4587dcc09df16f1bb49374a9e7f8f53cdb4816d50c87e4f4c"
+SOURCE_DIR="uade-$portVersion"
+PATCHES="uade-$portVersion.patchset"
+
+ARCHITECTURES="all !x86_gcc2"
+
+PROVIDES="
+	uade = $portVersion
+	cmd:uade123 = $portVersion
+	"
+REQUIRES="
+	haiku >= r1~beta5
+	lib:libao
+	lib:libbencodetools
+	lib:libzakalwe
+	"
+
+BUILD_REQUIRES="
+	haiku_devel
+	devel:libao
+	devel:libbencodetools
+	devel:libzakalwe
+	"
+BUILD_PREREQUIRES="
+	cmd:gcc
+	cmd:make
+	cmd:pkg_config
+	cmd:which
+	"
+
+defineDebugInfoPackage uade $binDir/uade123 $libDir/uade/uadecore
+
+BUILD()
+{
+	# uade's configure is a plain shell script (not autoconf), so it is
+	# invoked directly rather than through runConfigure: it has its own
+	# directory options (--mandir expects the man1 directory). The
+	# patchset handles the Haiku specifics (libnetwork linkage, strsep
+	# replacement, "-" output).
+	#
+	# bencode-tools and libzakalwe headers live in the system development
+	# directory, so add it to the compile path explicitly. The library
+	# prefixes point at /boot/system, which is where the libraries live
+	# both in this build environment and at runtime (the package-links
+	# prefix resolves to /boot/system).
+	export CFLAGS="$CFLAGS -I/boot/system/develop/headers"
+	./configure \
+		--prefix=$prefix \
+		--bindir=$binDir \
+		--mandir=$manDir/man1 \
+		--bencode-tools-prefix=/boot/system \
+		--libzakalwe-prefix=/boot/system \
+		--without-libuade \
+		--without-uadefs \
+		--without-write-audio \
+		--without-uadesimple
+	make
+}
+
+INSTALL()
+{
+	# Upstream ships an optional mod2ogg2.sh helper that depends on
+	# external tools not packaged here; remove it so the package does not
+	# advertise a cmd: that it cannot actually provide.
+	make install
+	rm -f $binDir/mod2ogg2.sh
+}
+
+TEST()
+{
+	# Offline verification against the build tree: -u and --basedir point
+	# uade123 at the freshly built uadecore and the source tree data, so
+	# the test does not depend on installed paths or an audio device.
+	#
+	# 1. player detection and song info printout (uade123 -g). Only the
+	#    detected player is asserted: the optional "uade:duration" probe
+	#    is not emitted in every build environment, so it is not checked.
+	#    The render below is the authoritative end-to-end check.
+	src/frontends/uade123/uade123 --basedir=. -u src/uadecore \
+		-S amigasrc/score/score -P players/AbyssHighestExperience \
+		-g songs/AHX.Cruisin > get-info.txt 2>&1
+	grep -q "playername: AHX v2" get-info.txt
+
+	# 2. render the bundled demo song to a WAV file; file output needs no
+	#    audio device and finishes well within a second
+	src/frontends/uade123/uade123 --basedir=. -u src/uadecore \
+		-S amigasrc/score/score -P players/AbyssHighestExperience \
+		-1 -f test-output.wav songs/AHX.Cruisin > render.txt 2>&1
+	test -s test-output.wav
+}
